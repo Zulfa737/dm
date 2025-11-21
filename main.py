@@ -2,22 +2,16 @@ import streamlit as st
 import joblib
 import re
 
-# Konfigurasi halaman harus menjadi perintah Streamlit pertama
+# Konfigurasi halaman
 st.set_page_config(
     page_title="Analisis Sentimen Film",
     page_icon="🎬",
     layout="centered"
 )
 
-
-# --- FUNGSI UTAMA ---
-
+# Load model & tools
 @st.cache_resource
 def load_model_objects():
-    """
-    Memuat model dan tools preprocessing dari file pickle.
-    Pastikan file .pkl berada di direktori yang sama.
-    """
     try:
         model_bnb = joblib.load("model_bernoulli_nb.pkl")
         model_svm = joblib.load("model_linear_svm.pkl")
@@ -25,34 +19,21 @@ def load_model_objects():
         vectorizer = joblib.load("vectorizer_tfidf.pkl")
         tools = joblib.load("preprocessing_tools.pkl")
         return model_bnb, model_svm, model_ensemble, vectorizer, tools
-    except FileNotFoundError as e:
-        st.error(f"⚠️ Error: File model tidak ditemukan ({e}). Pastikan file .pkl sudah diupload.")
-        return None, None, None, None, None
-    except Exception as e:
-        st.error(f"⚠️ Error saat memuat model: {e}")
+    except:
         return None, None, None, None, None
 
+model_bnb, model_svm, model_ensemble, vectorizer, tools = load_model_objects()
+
+# Preprocessing teks
 def preprocess_text(text, stopword_remover, stemmer):
-    """
-    Membersihkan teks input: lowercase, hapus karakter non-huruf, stopword removal, stemming.
-    """
-    # Lowercase & Hapus karakter selain huruf
     text = re.sub('[^A-Za-z]+', ' ', text).lower().strip()
-    # Hapus spasi berlebih
     text = re.sub('\s+', ' ', text)
-    
-    # Stopword Removal & Stemming (jika tools tersedia)
-    if stopword_remover:
-        text = stopword_remover.remove(text)
-    if stemmer:
-        text = stemmer.stem(text)
-        
+    text = stopword_remover.remove(text)
+    text = stemmer.stem(text)
     return text
 
+# Confidence label
 def get_confidence_badge(prob):
-    """
-    Memberikan label visual berdasarkan tingkat kepercayaan prediksi.
-    """
     if prob > 80:
         return "🟢 Tinggi", "success"
     elif prob > 60:
@@ -60,134 +41,76 @@ def get_confidence_badge(prob):
     else:
         return "🔴 Rendah", "error"
 
-# --- LOAD RESOURCES ---
-model_bnb, model_svm, model_ensemble, vectorizer, tools = load_model_objects()
-
-# --- USER INTERFACE (UI) ---
-
+# UI Utama
 st.title("🎬 Analisis Sentimen Film")
 st.markdown("### Ensemble Model (BernoulliNB + SVM)")
-st.markdown("Aplikasi ini menganalisis ulasan film dan memprediksi apakah sentimennya **Positif** atau **Negatif**.")
 
-# Cek apakah semua model berhasil dimuat
 models_loaded = all([model_bnb, model_svm, model_ensemble, vectorizer, tools])
 
 if not models_loaded:
-    st.warning("⚠️ Aplikasi tidak dapat berjalan karena file model belum lengkap.")
+    st.error("⚠ File model tidak ditemukan.")
 else:
-    st.divider()
-    st.subheader("✍️ Masukkan Ulasan Film")
+    st.subheader("✍ Masukkan Ulasan Film")
 
-    # Pilihan contoh input untuk memudahkan user mencoba
     example_texts = [
         "Filmnya bagus banget, alurnya tidak ketebak!",
-        "Film jelek, buang waktu saja nonton ini.",
-        "Keren, aktingnya mantap sekali dan visualnya memukau.",
-        "Goblok banget filmnya tidak bermutu sama sekali.",
-        "Biasa aja sih, tidak terlalu bagus tapi lumayan menghibur.",
-        "Luar biasa, sangat recommended untuk ditonton bersama keluarga!"
+        "Film jelek, buang waktu saja",
+        "Keren, aktingnya mantap sekali",
+        "Goblok banget filmnya tidak bermutu",
+        "Biasa aja sih, tidak terlalu bagus",
+        "Luar biasa, sangat recommended!"
     ]
 
     selected_example = st.selectbox(
-        "Pilih contoh ulasan (opsional):",
+        "Pilih contoh ulasan:",
         ["-- Ketik manual --"] + example_texts
     )
 
-    # Set nilai awal text area berdasarkan pilihan user
     default_text = "" if selected_example == "-- Ketik manual --" else selected_example
 
-    input_text = st.text_area(
-        "Tulis ulasan Anda di sini:", 
-        value=default_text, 
-        height=150,
-        placeholder="Contoh: Film ini sangat menyentuh hati..."
-    )
+    input_text = st.text_area("Masukkan ulasan film:", value=default_text, height=100)
 
-    # Tombol & Opsi
-    col1, col2, col3 = st.columns([1, 2, 2])
+    col1, col2, col3 = st.columns(3)
     with col1:
-        predict_btn = st.button("🔍 Analisis", type="primary", use_container_width=True)
+        predict_btn = st.button("🔍 Analisis", type="primary")
     with col2:
-        show_comparison = st.checkbox("Bandingkan model individu", value=True)
+        show_comparison = st.checkbox("Bandingkan model", value=True)
     with col3:
-        show_details = st.checkbox("Lihat proses preprocessing", value=False)
+        show_details = st.checkbox("Detail preprocessing", value=False)
 
-    # --- LOGIKA PREDIKSI ---
     if predict_btn:
         if input_text.strip() == "":
-            st.warning("⚠️ Harap masukkan teks ulasan terlebih dahulu.")
+            st.warning("⚠ Masukkan teks terlebih dahulu.")
         else:
-            with st.spinner('Sedang menganalisis sentimen...'):
+            with st.spinner('Menganalisis...'):
                 try:
-                    # 1. Preprocessing
                     stopword_remover = tools['stopword']
                     stemmer = tools['stemmer']
-                    processed_text = preprocess_text(input_text, stopword_remover, stemmer)
-                    
-                    # 2. Vectorization
-                    vec = vectorizer.transform([processed_text])
+                    processed = preprocess_text(input_text, stopword_remover, stemmer)
+                    vec = vectorizer.transform([processed])
 
-                    # 3. Prediksi (Ensemble)
+                    pred_bnb = model_bnb.predict(vec)[0]
+                    pred_svm = model_svm.predict(vec)[0]
                     pred_ensemble = model_ensemble.predict(vec)[0]
+
+                    prob_bnb = model_bnb.predict_proba(vec)[0]
+                    prob_svm = model_svm.predict_proba(vec)[0]
                     prob_ensemble = model_ensemble.predict_proba(vec)[0]
 
-                    # --- TAMPILAN HASIL ---
-                    st.divider()
                     st.subheader("🎯 Hasil Analisis (Ensemble)")
 
-                    # Tentukan probabilitas kelas terpilih
-                    # Asumsi: index 0 = negatif, index 1 = positif (sesuaikan dengan model Anda)
-                    # Kita ambil probabilitas tertinggi sebagai confidence score
                     max_prob = max(prob_ensemble) * 100
                     conf_text, conf_type = get_confidence_badge(max_prob)
 
-                    # Tampilkan Alert Hasil Utama
-                    if pred_ensemble == "positive": # Sesuaikan label dengan output model Anda (misal: 1 atau 'positive')
-                        st.success(f"### ✅ Sentimen: POSITIF")
+                    if pred_ensemble == "positive":
+                        st.success("### ✅ Sentimen: POSITIF")
                     else:
-                        st.error(f"### ❌ Sentimen: NEGATIF")
+                        st.error("### ❌ Sentimen: NEGATIF")
 
-                    # Tampilkan Detail Probabilitas
-                    col_res1, col_res2 = st.columns(2)
-                    with col_res1:
-                        st.info(f"**Tingkat Keyakinan:**\n\n{conf_text} ({max_prob:.1f}%)")
-                    
-                    with col_res2:
-                        st.write("**📊 Probabilitas Detail:**")
-                        # Asumsi prob_ensemble[0] = Negatif, [1] = Positif
-                        st.progress(prob_ensemble[1], text=f"Positif: {prob_ensemble[1]*100:.1f}%")
-                        st.progress(prob_ensemble[0], text=f"Negatif: {prob_ensemble[0]*100:.1f}%")
+                    st.info(f"Tingkat Keyakinan: {conf_text} ({max_prob:.1f}%)")
 
-                    # --- OPSI: BANDINGKAN MODEL ---
-                    if show_comparison:
-                        st.markdown("---")
-                        st.markdown("#### 🤖 Perbandingan Model Individu")
-                        
-                        # Prediksi model individu
-                        pred_bnb = model_bnb.predict(vec)[0]
-                        pred_svm = model_svm.predict(vec)[0]
-                        
-                        comp_col1, comp_col2 = st.columns(2)
-                        with comp_col1:
-                            st.caption("Bernoulli Naive Bayes")
-                            if pred_bnb == "positive":
-                                st.success("Positif")
-                            else:
-                                st.error("Negatif")
-                        
-                        with comp_col2:
-                            st.caption("Linear SVM")
-                            if pred_svm == "positive":
-                                st.success("Positif")
-                            else:
-                                st.error("Negatif")
-
-                    # --- OPSI: LIHAT PREPROCESSING ---
-                    if show_details:
-                        st.markdown("---")
-                        st.markdown("#### 🔬 Detail Preprocessing")
-                        st.text_area("Teks Asli:", value=input_text, height=70, disabled=True)
-                        st.text_area("Hasil Preprocessing (Stemmed & Cleaned):", value=processed_text, height=70, disabled=True)
-
-                except Exception as e:
-                    st.error(f"Terjadi kesalahan saat proses prediksi: {e}")
+                    # Probabilitas
+                    st.write("📊 Probabilitas:")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Negatif", f"{prob_ensemble[0]*100:.1f}%")
