@@ -9,6 +9,7 @@ st.set_page_config(
     layout="centered"
 )
 
+
 # --- FUNGSI UTAMA ---
 
 @st.cache_resource
