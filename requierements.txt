@@ -1,6 +1,5 @@
 # Framework Web
 streamlit
-
 # Machine Learning
 scikit-learn
 joblib
