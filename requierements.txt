@@ -12,7 +12,7 @@ numpy
 # NLP Bahasa Indonesia
 Sastrawi
 
-# Visualisasi (opsional, untuk training)
+# Visualisasi (untuk training)
 matplotlib
 seaborn
 wordcloud
