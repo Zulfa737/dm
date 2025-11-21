@@ -1,5 +1,6 @@
 # Framework Web
 streamlit
+
 # Machine Learning
 scikit-learn
 joblib
@@ -11,7 +12,7 @@ numpy
 # NLP Bahasa Indonesia
 Sastrawi
 
-# Visualisasi (untuk training)
+# Visualisasi (opsional, untuk training)
 matplotlib
 seaborn
 wordcloud
